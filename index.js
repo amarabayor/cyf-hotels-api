@@ -120,17 +120,55 @@ app.get("/customers/:customersId/bookings", function (req, res) {
 });
  
 // Exercises 3, put ///
-app.put("/customers/:customerId", function (req, res) {
+app.patch("/customers/:customerId", function (req, res) {
   const customerId = req.params.customerId;
+  const newEmail = req.body.email;
   const newAddress = req.body.address;
   const newCity = req.body.city;
   const newPostcode = req.body.postcode;
   const newCountry = req.body.country;
-
-  pool
-    .query("UPDATE customers SET address=$1,city=$2,postcode=$3,country=$4 WHERE id=$5", [newAddress, newCity, newPostcode, newCountry, customerId])
-    .then(() => res.send(`Customer ${customerId} updated!`))
-    .catch((e) => res.status(400).send(e.message));
+  return pool
+    .query("SELECT * FROM customers WHERE id=$1;", [customerId])
+    .then((result) => {
+      const customers = result.rows;
+      const customer = customers[0];
+      if (newEmail !== "" && newEmail !== undefined) {
+        customer.email = newEmail;
+      }
+      if (newAddress !== "" && newAddress !== undefined) {
+        customer.address = newAddress;
+      }
+      if (newCity !== "" && newCity !== undefined) {
+        customer.city = newCity;
+      }
+      if (newPostcode !== "" && newPostcode !== undefined) {
+        customer.postcode = newPostcode;
+      }
+      if (newCountry !== "" && newCountry !== undefined) {
+        customer.country = newCountry;
+      }
+      pool
+        .query(
+          `
+          UPDATE customers
+          SET email=$1, address=$2, city=$3, postcode=$4, country=$5
+          WHERE id=$6;
+          `,
+          [
+            customer.email,
+            customer.address,
+            customer.city,
+            customer.postcode,
+            customer.country,
+            customer.id,
+          ]
+        )
+        .then(() => res.send(`Customer ${customerId} updated!`))
+        .catch((e) => {
+          console.error(e.stack);
+          res.status(500).send("Internal Server Error");
+        });
+    });
 });
 
 /// Delect customersId//
@@ -157,7 +195,10 @@ app.delete("/hotels/:hotelId", function (req, res) {
 
   pool
     .query("DELETE FROM bookings WHERE hotelId=$1", [hotelId])
-    .then(() => {
+    .then((result) => {
+      if (result.rows.length >0){
+        return res.status(400),send("The Hotels still has a bookings")
+      }
       pool
         .query("DELETE FROM hotels WHERE id=$1", [hotelId])
         .then(() => res.send(`Hotel ${hotelId} deleted!`))
